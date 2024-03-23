@@ -70,7 +70,7 @@ def test_chain_rule3() -> None:
 
     y = Function2.apply(constant, var)
 
-    back = y.chain_rule(d_output=5)
+    back = y.chain_rule(d_output=5.0)
     back = list(back)
     assert len(back) == 2
     variable, deriv = back[1]
@@ -85,7 +85,7 @@ def test_chain_rule4() -> None:
 
     y = Function2.apply(var1, var2)
 
-    back = y.chain_rule(d_output=5)
+    back = y.chain_rule(d_output=5.0)
     back = list(back)
     assert len(back) == 2
     variable, deriv = back[0]

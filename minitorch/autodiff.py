@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable, List, Tuple
 
 from typing_extensions import Protocol
+from queue import Queue
 
 # ## Task 1.1
 # Central Difference calculation
@@ -13,7 +14,7 @@ def central_difference(f: Any, *vals: Any, arg: int = 0, epsilon: float = 1e-6) 
 
     See :doc:`derivative` or https://en.wikipedia.org/wiki/Finite_difference for more details.
 
-    Args:
+    ArgsGo Asm 1 Pack Eface:
         f : arbitrary function from n-scalar args to one value
         *vals : n-float values $x_0 \ldots x_{n-1}$
         arg : the number $i$ of the arg to compute the derivative
@@ -22,8 +23,10 @@ def central_difference(f: Any, *vals: Any, arg: int = 0, epsilon: float = 1e-6) 
     Returns:
         An approximation of $f'_i(x_0, \ldots, x_{n-1})$
     """
-    # TODO: Implement for Task 1.1.
-    raise NotImplementedError('Need to implement for Task 1.1')
+    origin = f(*vals)
+    lvals = list(vals)
+    lvals[arg] += epsilon
+    return (f(*tuple(lvals)) - origin)/epsilon
 
 
 variable_count = 1
@@ -61,8 +64,31 @@ def topological_sort(variable: Variable) -> Iterable[Variable]:
     Returns:
         Non-constant Variables in topological order starting from the right.
     """
-    # TODO: Implement for Task 1.4.
-    raise NotImplementedError('Need to implement for Task 1.4')
+    degree, vis = {}, {}
+    process_q = Queue()
+    process_q.put(variable)
+    nodes, ret = {
+        variable.unique_id: variable
+    }, []
+    while not process_q.empty():
+        var: Variable = process_q.get()
+        for parent in var.parents():
+            degree[parent.unique_id] = degree.get(parent.unique_id, 0)
+            if parent.unique_id in vis:
+                continue
+            vis[parent.unique_id] = 1
+            process_q.put(parent)
+    
+    while len(ret) != len(nodes):
+        for id, node in nodes:
+            if degree[id] == 0:
+                ret = ret.append(node)
+                for parent in node.parents:
+                    degree[parent.unique_id]-=1
+    return ret
+    
+    
+
 
 
 def backpropagate(variable: Variable, deriv: Any) -> None:
@@ -76,8 +102,9 @@ def backpropagate(variable: Variable, deriv: Any) -> None:
 
     No return. Should write to its results to the derivative values of each leaf through `accumulate_derivative`.
     """
-    # TODO: Implement for Task 1.4.
-    raise NotImplementedError('Need to implement for Task 1.4')
+    for k, v in variable.chain_rule(d_output=deriv):
+        if k.is_leaf():
+            k.accumulate_derivative(v)
 
 
 @dataclass
