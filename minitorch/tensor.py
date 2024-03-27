@@ -312,6 +312,19 @@ class Tensor:
             out = zero(shape)
         out._type_(self.backend)
         return out
+    
+    def ones(self, shape: Optional[UserShape] = None) -> Tensor:
+        def one(shape: UserShape) -> Tensor:
+            return Tensor.make(
+                [1.0] * int(operators.prod(shape)), shape, backend=self.backend
+            )
+
+        if shape is None:
+            out = one(self.shape)
+        else:
+            out = one(shape)
+        out._type_(self.backend)
+        return out
 
     def tuple(self) -> Tuple[Storage, Shape, Strides]:
         return self._tensor.tuple()

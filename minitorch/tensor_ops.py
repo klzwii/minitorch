@@ -12,6 +12,8 @@ from .tensor_data import (
     index_to_position,
     shape_broadcast,
     to_index,
+    TensorData,
+    UserIndex
 )
 
 if TYPE_CHECKING:
@@ -222,13 +224,23 @@ class SimpleOps(TensorOps):
 
     @staticmethod
     def matrix_multiply(a: "Tensor", b: "Tensor") -> "Tensor":
-        raise NotImplementedError("Not implemented in this assignment")
+        _c_storage = np.matmul(np.array(a._tensor._storage),np.array(b._tensor._storage))
+        if _c_storage.size == 1:
+            _c_storage = _c_storage.reshape(-1)
+        out = a.make(_c_storage, _c_storage.shape, backend=a.backend)
+        return out
+        
 
     is_cuda = False
 
 
 # Implementations.
 
+def get_index_before_broadcast(shape: Shape, index: UserIndex)-> UserIndex:
+    index = list(index[len(index) - len(shape):])
+    for pos, idx in enumerate(shape):
+        index[pos] = min(idx - 1, index[pos])
+    return tuple(index)
 
 def tensor_map(
     fn: Callable[[float], float]
@@ -264,8 +276,14 @@ def tensor_map(
         in_shape: Shape,
         in_strides: Strides,
     ) -> None:
-        # TODO: Implement for Task 2.3.
-        raise NotImplementedError('Need to implement for Task 2.3')
+        n_storage = np.zeros(in_storage.shape)
+        n_tensor = TensorData(n_storage, tuple(in_shape), tuple(in_strides))
+        in_tensor = TensorData(in_storage, tuple(in_shape), tuple(in_strides))
+        for idx in n_tensor.indices():
+            n_tensor.set(idx, fn(in_tensor.get(idx)))
+        out_tensor = TensorData(out, tuple(out_shape), tuple(out_strides))
+        for idx in out_tensor.indices():
+            out_tensor.set(idx, n_tensor.get(get_index_before_broadcast(in_shape, idx)))
 
     return _map
 
@@ -297,7 +315,7 @@ def tensor_zip(
     Returns:
         Tensor zip function.
     """
-
+    
     def _zip(
         out: Storage,
         out_shape: Shape,
@@ -309,8 +327,11 @@ def tensor_zip(
         b_shape: Shape,
         b_strides: Strides,
     ) -> None:
-        # TODO: Implement for Task 2.3.
-        raise NotImplementedError('Need to implement for Task 2.3')
+        a_tensor = TensorData(a_storage, tuple(a_shape), tuple(a_strides))
+        b_tensor = TensorData(b_storage, tuple(b_shape), tuple(b_strides))
+        out_tensor = TensorData(out, tuple(out_shape), tuple(out_strides))
+        for idx in out_tensor.indices():
+            out_tensor.set(idx, fn(a_tensor.get(get_index_before_broadcast(a_shape, idx)), b_tensor.get(get_index_before_broadcast(b_shape, idx))))
 
     return _zip
 
@@ -340,8 +361,13 @@ def tensor_reduce(
         a_strides: Strides,
         reduce_dim: int,
     ) -> None:
-        # TODO: Implement for Task 2.3.
-        raise NotImplementedError('Need to implement for Task 2.3')
+        a_tensor = TensorData(a_storage, tuple(a_shape), tuple(a_strides))
+        out_tensor = TensorData(out, tuple(out_shape), tuple(out_strides))
+        for idx in a_tensor.indices():
+            n_idx = list(idx)
+            n_idx[reduce_dim] = 0
+            n_idx = tuple(n_idx)
+            out_tensor.set(n_idx, fn(out_tensor.get(n_idx), a_tensor.get(idx)))
 
     return _reduce
 

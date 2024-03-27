@@ -159,19 +159,14 @@ class Scalar:
 
     def chain_rule(self, d_output: Any) -> Iterable[Tuple[Variable, Any]]:
         h = self.history
-        if self.is_leaf():
-            return [(self, d_output)]
-        if  self.is_constant():
+        if self.is_leaf() or self.is_constant():
             return []
         assert h is not None
         assert h.last_fn is not None
         assert h.ctx is not None
         
-        ret = []
         inputs = h.last_fn._backward(h.ctx, d_output)
-        for idx, scalar in enumerate(h.inputs):
-             ret += scalar.chain_rule(inputs[idx])
-        return ret
+        return [(scalar, inputs[idx]) for idx, scalar in enumerate(h.inputs)]
         
 
     def backward(self, d_output: Optional[float] = None) -> None:

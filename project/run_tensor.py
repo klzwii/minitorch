@@ -4,6 +4,7 @@ Be sure you have minitorch installed in you Virtual Env.
 """
 
 import minitorch
+import time
 
 
 def RParam(*shape):
@@ -45,8 +46,13 @@ class Linear(minitorch.Module):
         # END ASSIGN2.5
 
 
-def default_log_fn(epoch, total_loss, correct, losses):
-    print("Epoch ", epoch, " loss ", total_loss, "correct", correct)
+def default_log_fn():
+    now = time.time()
+    def default_log_fn(epoch, total_loss, correct, losses):
+        nonlocal now
+        print("Epoch ", epoch, " loss ", total_loss, "correct", correct, "time_consumed", time.time() - now, "s")
+        now = time.time()
+    return default_log_fn
 
 
 class TensorTrain:
@@ -60,7 +66,7 @@ class TensorTrain:
     def run_many(self, X):
         return self.model.forward(minitorch.tensor(X))
 
-    def train(self, data, learning_rate, max_epochs=500, log_fn=default_log_fn):
+    def train(self, data, learning_rate, max_epochs=500, log_fn=default_log_fn()):
 
         self.learning_rate = learning_rate
         self.max_epochs = max_epochs
@@ -98,6 +104,6 @@ class TensorTrain:
 if __name__ == "__main__":
     PTS = 50
     HIDDEN = 2
-    RATE = 0.5
+    RATE = 1.2
     data = minitorch.datasets["Simple"](PTS)
     TensorTrain(HIDDEN).train(data, RATE)

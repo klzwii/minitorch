@@ -42,10 +42,10 @@ def index_to_position(index: Index, strides: Strides) -> int:
     Returns:
         Position in storage
     """
-
-    # TODO: Implement for Task 2.1.
-    raise NotImplementedError('Need to implement for Task 2.1')
-
+    sum = 0
+    for idx, p in enumerate(index):
+        sum += p * strides[idx]
+    return sum
 
 def to_index(ordinal: int, shape: Shape, out_index: OutIndex) -> None:
     """
@@ -60,9 +60,10 @@ def to_index(ordinal: int, shape: Shape, out_index: OutIndex) -> None:
         out_index : return index corresponding to position.
 
     """
-    # TODO: Implement for Task 2.1.
-    raise NotImplementedError('Need to implement for Task 2.1')
-
+    out_index[len(shape) - 1] = ordinal
+    for i in range(len(shape) - 1, 0, -1):
+        out_index[i - 1] = out_index[i] / shape[i]
+        out_index[i] %= shape[i] 
 
 def broadcast_index(
     big_index: Index, big_shape: Shape, shape: Shape, out_index: OutIndex
@@ -101,9 +102,19 @@ def shape_broadcast(shape1: UserShape, shape2: UserShape) -> UserShape:
     Raises:
         IndexingError : if cannot broadcast
     """
-    # TODO: Implement for Task 2.2.
-    raise NotImplementedError('Need to implement for Task 2.2')
-
+    if len(shape1) < len(shape2):
+        shape1, shape2 = shape2, shape1
+    ret = [0 for i in range(len(shape1))]
+    for i in range(len(shape1)):
+        cur_dim2 = 1 if i >= len(shape2) else shape2[len(shape2) - 1 - i]
+        cur_dim1 = shape1[len(shape1) - i - 1]
+        if cur_dim1 == cur_dim2:
+            ret[len(shape1) - i - 1] = cur_dim1
+            continue
+        if cur_dim1 != 1 and cur_dim2 != 1:
+            raise IndexingError
+        ret[len(shape1) - i - 1] = max(cur_dim1, cur_dim2)
+    return tuple(ret)
 
 def strides_from_shape(shape: UserShape) -> UserStrides:
     layout = [1]
@@ -146,7 +157,7 @@ class TensorData:
         self.dims = len(strides)
         self.size = int(prod(shape))
         self.shape = shape
-        assert len(self._storage) == self.size
+        assert len(self._storage) == self.size, f"Len of storage {type(storage)} {storage} must match {shape}"
 
     def to_cuda_(self) -> None:  # pragma: no cover
         if not numba.cuda.is_cuda_array(self._storage):
@@ -212,6 +223,9 @@ class TensorData:
 
     def tuple(self) -> Tuple[Storage, Shape, Strides]:
         return (self._storage, self._shape, self._strides)
+    
+    def __repr__(self) -> str:
+        return f"tensorData {self.shape} {self.strides} {self._storage}"
 
     def permute(self, *order: int) -> TensorData:
         """
@@ -226,9 +240,9 @@ class TensorData:
         assert list(sorted(order)) == list(
             range(len(self.shape))
         ), f"Must give a position to each dimension. Shape: {self.shape} Order: {order}"
-
-        # TODO: Implement for Task 2.1.
-        raise NotImplementedError('Need to implement for Task 2.1')
+        n_shape = [self.shape[idx] for idx in order]
+        n_stride = [self._strides[idx] for idx in order]
+        return TensorData(storage=self._storage, shape=tuple(n_shape), strides=tuple(n_stride))
 
     def to_string(self) -> str:
         s = ""
