@@ -169,7 +169,12 @@ class Sum(Function):
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, float]:
         a_shape, dim = ctx.saved_values
-        return grad_output, 0.0
+        dim = int(dim._tensor._storage[0])
+        (storage, shape, strides) = grad_output._tensor.tuple()
+        tile = np.ones([len(a_shape)], dtype=int)
+        tile[dim] = a_shape[dim]
+        p = np.tile(np.expand_dims(np.array(storage).reshape(shape), dim), tile)
+        return grad_output.make(storage=p.reshape(-1).tolist(), shape=a_shape, backend=grad_output.backend), 0.0
 
 
 class All(Function):

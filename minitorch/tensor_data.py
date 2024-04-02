@@ -43,9 +43,10 @@ def index_to_position(index: Index, strides: Strides) -> int:
         Position in storage
     """
     sum = 0
-    for idx, p in enumerate(index):
-        sum += p * strides[idx]
-    return sum
+    for idx, stride in enumerate(strides):
+        # print('jahaha', idx, p, strides[idx])
+        sum += index[idx] * stride
+    return int(sum)
 
 def to_index(ordinal: int, shape: Shape, out_index: OutIndex) -> None:
     """
@@ -84,9 +85,12 @@ def broadcast_index(
     Returns:
         None
     """
-    # TODO: Implement for Task 2.2.
-    raise NotImplementedError('Need to implement for Task 2.2')
-
+    for i, bshape in enumerate(big_shape):
+        p = len(big_shape) - i - 1
+        if p > len(shape):
+            continue
+        cur_idx = len(shape) - p - 1
+        out_index[cur_idx] = min(shape[cur_idx] - 1, big_index[i])
 
 def shape_broadcast(shape1: UserShape, shape2: UserShape) -> UserShape:
     """
@@ -119,7 +123,7 @@ def shape_broadcast(shape1: UserShape, shape2: UserShape) -> UserShape:
 def strides_from_shape(shape: UserShape) -> UserStrides:
     layout = [1]
     offset = 1
-    for s in reversed(shape):
+    for s in reversed(list(shape)):
         layout.append(s * offset)
         offset = s * offset
     return tuple(reversed(layout[:-1]))
@@ -160,8 +164,8 @@ class TensorData:
         assert len(self._storage) == self.size, f"Len of storage {type(storage)} {storage} must match {shape}"
 
     def to_cuda_(self) -> None:  # pragma: no cover
-        if not numba.cuda.is_cuda_array(self._storage):
-            self._storage = numba.cuda.to_device(self._storage)
+        # if not numba.cuda.is_cuda_array(self._storage):
+        self._storage = numba.cuda.to_device(self._storage)
 
     def is_contiguous(self) -> bool:
         """

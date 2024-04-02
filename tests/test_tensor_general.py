@@ -7,7 +7,7 @@ from hypothesis import given, settings
 from hypothesis.strategies import DataObject, data, integers, lists, permutations
 
 import minitorch
-from minitorch import MathTestVariable, Tensor, TensorBackend, grad_check
+from minitorch import MathTestVariable, Tensor, TensorBackend, grad_check, TensorData
 
 from .strategies import assert_close, small_floats
 from .tensor_strategies import assert_close_tensor, shaped_tensors, tensors
@@ -305,7 +305,7 @@ if numba.cuda.is_available():
 
 
 @given(data())
-@settings(max_examples=25)
+@settings(max_examples=50)
 @pytest.mark.parametrize("fn", two_arg)
 @pytest.mark.parametrize("backend", backend_tests)
 def test_two_grad_broadcast(

@@ -10,3 +10,6 @@ To access the autograder:
 * Module 3: https://classroom.github.com/a/U5CMJec1
 * Module 4: https://classroom.github.com/a/04QA6HZK
 * Quizzes: https://classroom.github.com/a/bGcGc12k
+
+assignment 2:
+![Alt text](<Screenshot from 2024-03-27 23-43-25.png>)
