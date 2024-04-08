@@ -77,11 +77,21 @@ def _tensor_conv1d(
         and in_channels == in_channels_
         and out_channels == out_channels_
     )
-    s1 = input_strides
-    s2 = weight_strides
-
-    # TODO: Implement for Task 4.1.
-    raise NotImplementedError('Need to implement for Task 4.1')
+    s10, s11, s12 = input_strides[0], input_strides[1], input_strides[2]
+    s20, s21, s22 = weight_strides[0], weight_strides[1], weight_strides[2]
+    s30, s31, s32 = out_strides[0], out_strides[1], out_strides[2]
+    for out_s in prange(out_size):
+        out_idx = np.zeros(3, dtype=np.int32)
+        to_index(out_s, out_shape, out_idx)
+        cur_batch, out_channel, i = out_idx
+        temp = 0.0
+        for in_channel in prange(in_channels):
+            for j in range(kw):
+                if not reverse:
+                    temp += input[cur_batch * s10+ in_channel * s11+ (i+j)*s12] * weight[out_channel*s20+in_channel*s21+j*s22] if i + j < width else 0.0
+                else:
+                    temp += input[cur_batch * s10+ in_channel * s11+ (i-j)*s12] * weight[out_channel*s20+in_channel*s21+j*s22] if i - j >= 0 else 0.0
+        out[cur_batch*s30+out_channel*s31+i*s32] = temp
 
 
 tensor_conv1d = njit(parallel=True)(_tensor_conv1d)
@@ -190,7 +200,7 @@ def _tensor_conv2d(
         weight_strides (Strides): strides for `input` tensor.
         reverse (bool): anchor weight at top-left or bottom-right
     """
-    batch_, out_channels, _, _ = out_shape
+    batch_, out_channels, out_height, out_width = out_shape
     batch, in_channels, height, width = input_shape
     out_channels_, in_channels_, kh, kw = weight_shape
 
@@ -205,12 +215,36 @@ def _tensor_conv2d(
     # inners
     s10, s11, s12, s13 = s1[0], s1[1], s1[2], s1[3]
     s20, s21, s22, s23 = s2[0], s2[1], s2[2], s2[3]
-
-    # TODO: Implement for Task 4.2.
-    raise NotImplementedError('Need to implement for Task 4.2')
-
+    s30, s31, s32, s33 = out_strides[0], out_strides[1], out_strides[2], out_strides[3]
+    for out_i in prange(out_size):
+        out_index = np.zeros(4, dtype=np.int32)
+        to_index(out_i, out_shape, out_index)
+        cur_batch, out_channel, i, ii = out_index
+        temp = 0.0
+        for in_channel in prange(in_channels):
+            for j in range(kh):
+                for jj in range(kw):
+                        if not reverse:
+                            temp += input[s10 * cur_batch + s11 * in_channel+ s12 * (i + j)+ s13 * (ii + jj)] * weight[s20 * out_channel+ s21 * in_channel+ s22 * j+ s23 * jj] if i + j < height and ii + jj < width else 0.0
+                        else:
+                            temp += input[s10 * cur_batch+ s11 * in_channel+ s12 * (i - j)+ s13 * (ii - jj)] * weight[s20 * out_channel+ s21 * in_channel+ s22 * j+ s23 * jj] if i - j >= 0 and ii - j >= 0 else 0.0
+        out[cur_batch*s30 + out_channel*s31 + i*s32 + ii*s33] = temp
 
 tensor_conv2d = njit(parallel=True, fastmath=True)(_tensor_conv2d)
+"""
+1 2 3
+4 5 6 
+7 8 9
+
+A B
+C D
+
+1A+2B+4C+5D:P1  2A+3B+5C+6D:P2
+4A+5B+7C+8D:P3  5A+6B+8C+9D:P4
+
+P1*A      P2*A+P1*B
+P1*C+P3*A P1*D+p2*C+p3*B+P4*A
+"""
 
 
 class Conv2dFun(Function):

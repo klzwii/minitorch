@@ -3,9 +3,21 @@ from typing import Tuple
 from . import operators
 from .autodiff import Context
 from .fast_ops import FastOps
-from .tensor import Tensor
+from .tensor import (
+    Tensor
+)
 from .tensor_functions import Function, rand, tensor
+import numpy as np
 
+from .tensor_data import (
+    MAX_DIMS,
+    Index,
+    Shape,
+    Strides,
+    broadcast_index,
+    index_to_position,
+    to_index,
+)
 
 def tile(input: Tensor, kernel: Tuple[int, int]) -> Tuple[Tensor, int, int]:
     """
@@ -23,8 +35,9 @@ def tile(input: Tensor, kernel: Tuple[int, int]) -> Tuple[Tensor, int, int]:
     kh, kw = kernel
     assert height % kh == 0
     assert width % kw == 0
-    # TODO: Implement for Task 4.3.
-    raise NotImplementedError('Need to implement for Task 4.3')
+    k_tensor = input.zeros((2,))
+    k_tensor[0], k_tensor[1] = kh, kw
+    return Tile.apply(input, k_tensor), height//kh, height//kw
 
 
 def avgpool2d(input: Tensor, kernel: Tuple[int, int]) -> Tensor:
@@ -38,9 +51,113 @@ def avgpool2d(input: Tensor, kernel: Tuple[int, int]) -> Tensor:
     Returns:
         Pooled tensor
     """
-    batch, channel, height, width = input.shape
-    # TODO: Implement for Task 4.3.
-    raise NotImplementedError('Need to implement for Task 4.3')
+    mid_tensor, nh, nw = tile(input=input, kernel=kernel)
+    return AvgPool2d.apply(mid_tensor)
+
+class Tile(Function):
+    @staticmethod
+    def forward(ctx: Context, input: Tensor, kernel: Tensor) -> Tensor:
+        batch, channel, height, width = input.shape
+        kh, kw = int(kernel[0]), int(kernel[1])
+        shape = [batch, channel, height // kh, width // kw, kh, kw]
+        out_tensor = input.zeros(tuple(shape))
+        for ba in range(batch):
+            for ch in range(channel):
+                for h in range(shape[2]):
+                    for w in range(shape[3]):
+                        for th in range(kh):
+                            for tw in range(kw):
+                                out_tensor[ba, ch, h, w, th, tw] = input[ba, ch, h*kh+th, w*kw+tw]
+        ctx.save_for_backward(input, kernel)
+        return out_tensor 
+
+    @staticmethod
+    def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, Tensor]:
+        input, kernel = ctx.saved_values
+        batch, channel, height, width = input.shape
+        kh, kw = int(kernel[0]), int(kernel[1])
+        shape = [batch, channel, height // kh, width // kw, kh, kw]
+        grad_tensor = input.zeros()
+        for ba in range(batch):
+            for ch in range(channel):
+                for h in range(shape[2]):
+                    for w in range(shape[3]):
+                        for th in range(kh):
+                            for tw in range(kw):
+                                grad_tensor[ba, ch, h * kh + th, w * kw + tw] = grad_output[ba, ch, h, w, th, tw]
+        return grad_tensor, grad_output.zeros((2,))
+
+
+class AvgPool2d(Function):
+    @staticmethod
+    def forward(ctx: Context, input: Tensor) -> Tensor:
+        batch, channel, height, width, kh, kw = input.shape
+        k_size = kh*kw
+        shape = [batch, channel, height, width]
+        out_tensor = input.zeros(tuple(shape))
+        for ba in range(batch):
+            for ch in range(channel):
+                for h in range(height):
+                    for w in range(width):
+                        temp = 0.
+                        for th in range(kh):
+                            for tw in range(kw):
+                                temp += input[ba, ch, h, w, th, tw]
+                        out_tensor[ba, ch, h, w] = temp/k_size
+        ctx.save_for_backward(input, out_tensor)
+        return out_tensor
+
+    @staticmethod
+    def backward(ctx: Context, grad_output: Tensor) -> Tensor:
+        input, out_tensor = ctx.saved_values
+        batch, channel, height, width, kh, kw = input.shape
+        k_size = kh*kw
+        grad_tensor = input.zeros()
+        for ba in range(batch):
+            for ch in range(channel):
+                for h in range(height):
+                    for w in range(width):
+                        grad = grad_output[ba, ch, h, w] / k_size
+                        for th in range(kh):
+                            for tw in range(kw):
+                                grad_tensor[ba, ch, h, w, th, tw] = grad
+        return grad_tensor
+
+class MaxPool2D(Function):
+    @staticmethod
+    def forward(ctx: Context, input: Tensor) -> Tensor:
+        batch, channel, height, width, kh, kw = input.shape
+        k_size = kh*kw
+        shape = [batch, channel, height, width]
+        out_tensor = input.zeros(tuple(shape))
+        for ba in range(batch):
+            for ch in range(channel):
+                for h in range(height):
+                    for w in range(width):
+                        temp = input[ba, ch, h, w, 0, 0]
+                        for th in range(kh):
+                            for tw in range(kw):
+                                p = input[ba, ch, h, w, th, tw]
+                                temp = p if p > temp else temp
+                        out_tensor[ba, ch, h, w] = temp
+        ctx.save_for_backward(input, out_tensor)
+        return out_tensor
+
+    @staticmethod
+    def backward(ctx: Context, grad_output: Tensor) -> Tensor:
+        input, out_tensor = ctx.saved_values
+        batch, channel, height, width, kh, kw = input.shape
+        k_size = kh*kw
+        grad_tensor = input.zeros()
+        for ba in range(batch):
+            for ch in range(channel):
+                for h in range(height):
+                    for w in range(width):
+                        grad = grad_output[ba, ch, h, w] / k_size
+                        for th in range(kh):
+                            for tw in range(kw):
+                                grad_tensor[ba, ch, h, w, th, tw] = 1.0 if out_tensor[ba, ch, h, w] == input[ba, ch, h, w, th, tw] else 0.
+        return grad_tensor
 
 
 max_reduce = FastOps.reduce(operators.max, -1e9)
@@ -66,20 +183,42 @@ def argmax(input: Tensor, dim: int) -> Tensor:
 class Max(Function):
     @staticmethod
     def forward(ctx: Context, input: Tensor, dim: Tensor) -> Tensor:
-        "Forward of max should be max reduction"
-        # TODO: Implement for Task 4.4.
-        raise NotImplementedError('Need to implement for Task 4.4')
+        in_shape = input.shape
+        out_shape = list(in_shape)
+        out_shape[dim] = 1
+        out_tensor = input.zeros(shape=tuple(out_shape))
+        in_size = 1
+        for d in range(in_shape):
+            in_size *= d
+        dim = dim[0]
+        for i in range(in_size):
+            in_idx = np.zeros(len(in_shape), dtype=np.int32)
+            to_index(i, input.shape, in_idx)
+            if in_idx[dim] == 0:
+                out_tensor[in_idx] = input[in_idx]
+            else:
+                out_idx = in_idx
+                out_idx[dim] = 0
+                out_tensor[out_idx] = out_tensor[out_idx] if out_tensor[out_idx] > input[in_idx] else input[in_idx]
+        ctx.save_for_backward(input, out_tensor, dim, in_size)
+        return out_tensor
+            
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, float]:
-        "Backward of max should be argmax (see above)"
-        # TODO: Implement for Task 4.4.
-        raise NotImplementedError('Need to implement for Task 4.4')
+        input, out_tensor, dim, in_size = ctx.saved_values
+        out_tensor = input.zeros()
+        for i in range(in_size):
+            in_idx = np.zeros(len(input.shape), dtype=np.int32)
+            to_index(i, input.shape, in_idx)
+            out_idx = in_idx
+            out_idx[dim] = 0
+            input[in_idx] = grad_output[out_idx] if out_tensor[out_idx] == input[in_idx] else 0.0
+        return out_tensor
 
 
 def max(input: Tensor, dim: int) -> Tensor:
     return Max.apply(input, input._ensure_tensor(dim))
-
 
 def softmax(input: Tensor, dim: int) -> Tensor:
     r"""
@@ -96,8 +235,10 @@ def softmax(input: Tensor, dim: int) -> Tensor:
     Returns:
         softmax tensor
     """
-    # TODO: Implement for Task 4.4.
-    raise NotImplementedError('Need to implement for Task 4.4')
+    exp_tensor = input.exp()
+    sum_tensor = exp_tensor.sum(dim)
+    return exp_tensor / sum_tensor
+
 
 
 def logsoftmax(input: Tensor, dim: int) -> Tensor:
@@ -115,8 +256,8 @@ def logsoftmax(input: Tensor, dim: int) -> Tensor:
     Returns:
          log of softmax tensor
     """
-    # TODO: Implement for Task 4.4.
-    raise NotImplementedError('Need to implement for Task 4.4')
+    return input - input.exp().sum(dim).log()
+
 
 
 def maxpool2d(input: Tensor, kernel: Tuple[int, int]) -> Tensor:
@@ -130,10 +271,27 @@ def maxpool2d(input: Tensor, kernel: Tuple[int, int]) -> Tensor:
     Returns:
         Tensor : pooled tensor
     """
-    batch, channel, height, width = input.shape
-    # TODO: Implement for Task 4.4.
-    raise NotImplementedError('Need to implement for Task 4.4')
+    mid_tensor, nh, nw = tile(input=input, kernel=kernel)
+    return MaxPool2D.apply(mid_tensor)
 
+
+class Dropout(Function):
+    @staticmethod
+    def forward(ctx: Context, input:Tensor, rate: Tensor):
+        rate = rate[0]
+        mask = [input._tensor._storage[i] if not np.random.rand() < rate else 0. for i in range(input.size)]
+        out_tensor = input.make(mask, input.shape, input._tensor.strides, input.backend)
+        ctx.save_for_backward(mask)
+        return out_tensor
+    
+    @staticmethod
+    def backward(ctx: Context, grad_out:Tensor) -> Tuple[Tensor, float]:
+        (mask,) = ctx.saved_values
+        out_tensor = grad_out.make([0.0 for i in range(grad_out.size())], grad_out.shape, grad_out._tensor.strides, grad_out.backend)
+        for i in range(out_tensor.size()):
+            if mask[i]:
+                out_tensor._tensor._storage[i] = 0.
+        return out_tensor, 0.
 
 def dropout(input: Tensor, rate: float, ignore: bool = False) -> Tensor:
     """
@@ -147,5 +305,6 @@ def dropout(input: Tensor, rate: float, ignore: bool = False) -> Tensor:
     Returns:
         tensor with random positions dropped out
     """
-    # TODO: Implement for Task 4.4.
-    raise NotImplementedError('Need to implement for Task 4.4')
+    if ignore:
+        return input
+    return Dropout.apply(input, input._ensure_tensor(rate))

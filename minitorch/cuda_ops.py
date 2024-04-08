@@ -198,8 +198,6 @@ def tensor_zip(
         to_index(i, out_shape, out_idx)
         broadcast_index(out_idx, out_shape, a_shape, a_idx)
         broadcast_index(out_idx, out_shape, b_shape, b_idx)
-        aa = index_to_position(a_idx, a_strides)
-        ab = index_to_position(b_idx, b_strides)
         out[index_to_position(out_idx, out_strides)] = fn(a_storage[index_to_position(a_idx, a_strides)], b_storage[index_to_position(b_idx, b_strides)])
     return cuda.jit()(_zip)  # type: ignore
 
