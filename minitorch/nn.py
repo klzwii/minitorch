@@ -183,22 +183,24 @@ def argmax(input: Tensor, dim: int) -> Tensor:
 class Max(Function):
     @staticmethod
     def forward(ctx: Context, input: Tensor, dim: Tensor) -> Tensor:
+        dim=int(dim[0])
         in_shape = input.shape
         out_shape = list(in_shape)
         out_shape[dim] = 1
         out_tensor = input.zeros(shape=tuple(out_shape))
         in_size = 1
-        for d in range(in_shape):
+        for _, d in enumerate(in_shape):
             in_size *= d
-        dim = dim[0]
         for i in range(in_size):
             in_idx = np.zeros(len(in_shape), dtype=np.int32)
             to_index(i, input.shape, in_idx)
+            in_idx = tuple(in_idx)
             if in_idx[dim] == 0:
                 out_tensor[in_idx] = input[in_idx]
             else:
-                out_idx = in_idx
+                out_idx = list(in_idx)
                 out_idx[dim] = 0
+                out_idx=tuple(out_idx)
                 out_tensor[out_idx] = out_tensor[out_idx] if out_tensor[out_idx] > input[in_idx] else input[in_idx]
         ctx.save_for_backward(input, out_tensor, dim, in_size)
         return out_tensor
@@ -213,8 +215,10 @@ class Max(Function):
             to_index(i, input.shape, in_idx)
             out_idx = in_idx
             out_idx[dim] = 0
+            in_idx = tuple(in_idx)
+            out_idx = tuple(out_idx)
             input[in_idx] = grad_output[out_idx] if out_tensor[out_idx] == input[in_idx] else 0.0
-        return out_tensor
+        return out_tensor, 0.
 
 
 def max(input: Tensor, dim: int) -> Tensor:
@@ -287,8 +291,8 @@ class Dropout(Function):
     @staticmethod
     def backward(ctx: Context, grad_out:Tensor) -> Tuple[Tensor, float]:
         (mask,) = ctx.saved_values
-        out_tensor = grad_out.make([0.0 for i in range(grad_out.size())], grad_out.shape, grad_out._tensor.strides, grad_out.backend)
-        for i in range(out_tensor.size()):
+        out_tensor = grad_out.make([0.0 for i in range(grad_out.size)], grad_out.shape, grad_out._tensor.strides, grad_out.backend)
+        for i in range(out_tensor.size):
             if mask[i]:
                 out_tensor._tensor._storage[i] = 0.
         return out_tensor, 0.
